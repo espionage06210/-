@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小恐龍跳躍跑酷</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 遊戲專用自定義樣式 */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        #game-container {
+            width: 100%;
+            max-width: 900px;
+            background-color: #ffffff;
+            border: 4px solid #333;
+            border-radius: 12px;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #game-area {
+            position: relative;
+            width: 95%;
+            height: 250px;
+            border-bottom: 4px solid #333; /* 地板 */
+            overflow: hidden;
+            background-color: #fcfcfc;
+            border-radius: 6px 6px 0 0;
+            margin-top: 10px;
+        }
+
+        .game-element {
+            position: absolute;
+            bottom: 0;
+            transition: background-image 0.1s ease;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            border-radius: 4px;
+        }
+
+        /* 預設角色樣式 */
+        #player {
+            width: 40px;
+            height: 60px;
+            left: 50px;
+            background-color: #3b82f6; /* 藍色恐龍 */
+            z-index: 10;
+        }
+
+        /* 怪物樣式 */
+        .monster-type-1 {
+            width: 30px;
+            height: 40px;
+            background-color: #ef4444; /* 紅色仙人掌 */
+            z-index: 5;
+        }
+
+        .monster-type-2 {
+            width: 60px;
+            height: 40px;
+            background-color: #10b981; /* 綠色翼龍（但跑在地板上） */
+            z-index: 5;
+        }
+
+        /* 遊戲訊息和按鈕 */
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 15px 30px;
+            background-color: rgba(255, 255, 255, 0.95);
+            border: 3px solid #333;
+            border-radius: 8px;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            z-index: 20;
+        }
+        
+        .game-button {
+            background-color: #4CAF50; /* Green */
+            border: none;
+            color: white;
+            padding: 10px 24px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 8px;
+            box-shadow: 0 4px #2e7d32;
+            transition: all 0.1s ease;
+            font-weight: bold;
+        }
+
+        .game-button:hover {
+            background-color: #43a047;
+        }
+        
+        .game-button:active {
+            background-color: #388e3c;
+            box-shadow: 0 2px #1b5e20;
+            transform: translateY(2px);
+        }
+
+    </style>
+</head>
+<body>
+
+<div id="game-container" class="rounded-xl">
+    <div class="w-full flex justify-between p-2">
+        <h1 class="text-2xl font-bold text-gray-800">恐龍跳躍跑酷</h1>
+        <div id="score-display" class="text-xl font-bold text-gray-600">得分: 0</div>
+    </div>
+
+    <div id="game-area">
+        <!-- 角色 -->
+        <div id="player" class="game-element"></div>
+        
+        <!-- 遊戲開始/結束訊息 -->
+        <div id="message" class="hidden">
+            <h2 id="message-text" class="text-2xl font-bold mb-3">按下「開始遊戲」或空白鍵</h2>
+            <button id="start-button" class="game-button">開始遊戲</button>
+        </div>
+    </div>
+
+    <div class="p-4 text-center text-sm text-gray-500">
+        操作方式：按 **空白鍵 (Spacebar)** 讓角色跳躍。
+    </div>
+</div>
+
+<script>
+    // 獲取 DOM 元素
+    const gameArea = document.getElementById('game-area');
+    const player = document.getElementById('player');
+    const scoreDisplay = document.getElementById('score-display');
+    const messageBox = document.getElementById('message');
+    const messageText = document.getElementById('message-text');
+    const startButton = document.getElementById('start-button');
+
+    // =================================================================
+    // 【A. 遊戲設定與圖片替換區域】
+    // =================================================================
+    
+    // 請替換成您的圖片 URL。如果留空，則使用預設顏色方塊。
+    const PLAYER_IMAGE_URL = 'https://placehold.co/40x60/3b82f6/FFFFFF?text=P'; // 角色圖片
+    const MONSTER1_IMAGE_URL = 'https://placehold.co/30x40/ef4444/FFFFFF?text=M1'; // 怪物類型 1 圖片
+    const MONSTER2_IMAGE_URL = 'https://placehold.co/60x40/10b981/FFFFFF?text=M2'; // 怪物類型 2 圖片
+
+    // 遊戲速度設定 (每增加 500 分，速度會略微加快)
+    const BASE_SPEED = 5; // 基礎移動速度 (像素/幀)
+    const SPEED_INCREMENT = 0.5; // 速度增量
+
+    // =================================================================
+    // 遊戲狀態變數
+    // =================================================================
+    let isGameRunning = false;
+    let score = 0;
+    let currentSpeed = BASE_SPEED;
+    let animationFrameId = null;
+    
+    // 玩家狀態
+    const playerConfig = {
+        baseY: 0, // 玩家底部相對於 gameArea 底部的初始位置 (遊戲開始時設定)
+        isJumping: false,
+        yVelocity: 0,
+        jumpForce: 15,
+        gravity: 0.8,
+    };
+
+    // 怪物生成計時器
+    let timeSinceLastMonster = 0;
+    let monsterSpawnInterval = 100; // 初始怪物生成間隔 (幀數，約 1.6 秒)
+    const MIN_SPAWN_INTERVAL = 60; // 最小間隔 (約 1 秒)
+
+    // 儲存所有當前怪物的陣列
+    let monsters = [];
+
+    // =================================================================
+    // B. 初始化與圖片設定
+    // =================================================================
+
+    function setupImageStyles() {
+        if (PLAYER_IMAGE_URL) {
+            player.style.backgroundImage = `url('${PLAYER_IMAGE_URL}')`;
+            player.style.backgroundColor = 'transparent';
+        }
+    }
+
+    // 遊戲初始化
+    function initGame() {
+        // 設定遊戲畫布尺寸和玩家的基準 Y 座標
+        const playerRect = player.getBoundingClientRect();
+        const gameAreaRect = gameArea.getBoundingClientRect();
+
+        // 玩家底部距離 gameArea 底部的距離
+        playerConfig.baseY = gameAreaRect.height - playerRect.height;
+        player.style.transform = `translateY(${playerConfig.baseY}px)`; // 初始定位
+
+        // 重置所有狀態
+        score = 0;
+        currentSpeed = BASE_SPEED;
+        scoreDisplay.textContent = `得分: 0`;
+        monsters.forEach(m => m.element.remove());
+        monsters = [];
+        playerConfig.isJumping = false;
+        playerConfig.yVelocity = 0;
+
+        setupImageStyles();
+    }
+    
+    // 啟動遊戲
+    function startGame() {
+        if (isGameRunning) return;
+
+        initGame();
+        isGameRunning = true;
+        messageBox.classList.add('hidden');
+        timeSinceLastMonster = 0; // 重置計時器
+        
+        // 啟動遊戲循環
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        gameLoop();
+    }
+
+    // 遊戲結束
+    function gameOver() {
+        isGameRunning = false;
+        cancelAnimationFrame(animationFrameId);
+        
+        messageText.textContent = `遊戲結束！您獲得了 ${score} 分！`;
+        startButton.textContent = '重新開始';
+        messageBox.classList.remove('hidden');
+    }
+
+    // =================================================================
+    // C. 玩家操作與物理邏輯
+    // =================================================================
+
+    function playerJump() {
+        if (!playerConfig.isJumping && isGameRunning) {
+            playerConfig.isJumping = true;
+            playerConfig.yVelocity = -playerConfig.jumpForce; // 向上速度
+        }
+    }
+
+    function updatePlayer() {
+        if (!playerConfig.isJumping) return;
+
+        // 應用重力
+        playerConfig.yVelocity += playerConfig.gravity;
+        
+        // 更新玩家位置
+        let currentY = parseFloat(player.style.transform.match(/translateY\((.*)px\)/)[1]);
+        currentY += playerConfig.yVelocity;
+
+        // 檢查是否落地
+        if (currentY >= playerConfig.baseY) {
+            currentY = playerConfig.baseY; // 確保在地面上
+            playerConfig.isJumping = false;
+            playerConfig.yVelocity = 0;
+        }
+
+        player.style.transform = `translateY(${currentY}px)`;
+    }
+
+    // =================================================================
+    // D. 怪物生成與更新
+    // =================================================================
+
+    // 隨機生成怪物
+    function spawnMonster() {
+        // 隨機選擇怪物類型
+        const monsterType = Math.random() < 0.5 ? 1 : 2;
+        
+        const monsterElement = document.createElement('div');
+        monsterElement.classList.add('game-element', `monster-type-${monsterType}`);
+        gameArea.appendChild(monsterElement);
+
+        let width, height, imageUrl;
+
+        if (monsterType === 1) {
+            width = 30;
+            height = 40;
+            imageUrl = MONSTER1_IMAGE_URL;
+        } else {
+            width = 60;
+            height = 40;
+            imageUrl = MONSTER2_IMAGE_URL;
+        }
+
+        // 設置樣式和圖片
+        monsterElement.style.width = `${width}px`;
+        monsterElement.style.height = `${height}px`;
+        if (imageUrl) {
+            monsterElement.style.backgroundImage = `url('${imageUrl}')`;
+            monsterElement.style.backgroundColor = 'transparent';
+        }
+        
+        // 初始位置 (右側邊界外)
+        const startX = gameArea.clientWidth;
+        monsterElement.style.transform = `translateX(${startX}px)`;
+        
+        // 確保底部對齊
+        const baseY = gameArea.clientHeight - height;
+        monsterElement.style.bottom = `${baseY - playerConfig.baseY}px`;
+        
+        monsters.push({
+            element: monsterElement,
+            x: startX,
+            width: width,
+            height: height,
+            type: monsterType
+        });
+        
+        // 調整下一次生成間隔 (隨機化，增加遊戲的不可預測性)
+        const baseInterval = 100 - (currentSpeed - BASE_SPEED) * 5;
+        monsterSpawnInterval = Math.max(MIN_SPAWN_INTERVAL, baseInterval) + (Math.random() * 50 - 25);
+        timeSinceLastMonster = 0;
+    }
+
+    // 更新所有怪物的位置
+    function updateMonsters() {
+        // 怪物移動
+        monsters.forEach(monster => {
+            monster.x -= currentSpeed;
+            monster.element.style.transform = `translateX(${monster.x}px)`;
+        });
+
+        // 移除超出左側邊界的怪物
+        monsters = monsters.filter(monster => {
+            if (monster.x + monster.width < 0) {
+                monster.element.remove();
+                return false;
+            }
+            return true;
+        });
+
+        // 怪物生成
+        timeSinceLastMonster++;
+        if (timeSinceLastMonster >= monsterSpawnInterval) {
+            spawnMonster();
+        }
+    }
+
+    // =================================================================
+    // E. 碰撞檢測與計分
+    // =================================================================
+
+    function checkCollision() {
+        const pRect = player.getBoundingClientRect();
+        
+        // 獲取玩家在遊戲區域內的座標
+        const playerX = player.offsetLeft;
+        const playerY = parseFloat(player.style.transform.match(/translateY\((.*)px\)/)[1]);
+        const playerWidth = pRect.width;
+        const playerHeight = pRect.height;
+
+        for (const monster of monsters) {
+            const mRect = monster.element.getBoundingClientRect();
+            
+            // 怪物在遊戲區域內的座標
+            const monsterX = monster.x;
+            const monsterY = gameArea.clientHeight - monster.height; // 怪物底部總是貼齊地板
+            const monsterWidth = monster.width;
+            const monsterHeight = monster.height;
+
+            // 簡單 AABB 碰撞檢測 (只檢查 x 軸和 y 軸的重疊)
+            const overlapX = (playerX < monsterX + monsterWidth) && (playerX + playerWidth > monsterX);
+            const overlapY = (playerY < monsterY + monsterHeight) && (playerY + playerHeight > monsterY);
+
+            if (overlapX && overlapY) {
+                // 發生碰撞
+                gameOver();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function updateScore() {
+        score++;
+        scoreDisplay.textContent = `得分: ${score}`;
+
+        // 根據分數提高遊戲速度和難度
+        if (score % 500 === 0) {
+            currentSpeed += SPEED_INCREMENT;
+            console.log(`速度提升! 新速度: ${currentSpeed.toFixed(1)}`);
+        }
+    }
+
+    // =================================================================
+    // F. 遊戲主循環
+    // =================================================================
+
+    function gameLoop() {
+        if (!isGameRunning) return;
+
+        updatePlayer();
+        updateMonsters();
+        
+        // 碰撞檢查
+        if (checkCollision()) {
+            return; // 遊戲已結束
+        }
+        
+        updateScore();
+
+        // 請求下一幀動畫
+        animationFrameId = requestAnimationFrame(gameLoop);
+    }
+
+    // =================================================================
+    // G. 事件監聽器
+    // =================================================================
+
+    // 監聽空白鍵
+    document.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+            e.preventDefault(); // 防止頁面滾動
+            if (!isGameRunning) {
+                startGame();
+            } else {
+                playerJump();
+            }
+        }
+    });
+
+    // 監聽開始按鈕
+    startButton.addEventListener('click', startGame);
+
+    // 初始設置 (在 DOM 載入後執行)
+    window.onload = () => {
+        initGame();
+        messageBox.classList.remove('hidden'); // 顯示開始訊息
+    };
+
+</script>
+
+</body>
+</html>
